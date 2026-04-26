@@ -314,135 +314,7 @@ class AppState extends ChangeNotifier {
         .add(msg.toJson());
   }
 
-  // ─── Tasks ───────────────────────────────────────────────────────────────────
 
-  Stream<List<TaskItem>> getTasksStream(String classId) {
-    return _db
-        .collection('classes')
-        .doc(classId)
-        .collection('tasks')
-        .orderBy('createdAt', descending: false)
-        .snapshots()
-        .map((snap) =>
-            snap.docs.map((d) => TaskItem.fromJson(d.data(), d.id)).toList());
-  }
-
-  Future<void> addTask(TaskItem task) async {
-    final ref = _db
-        .collection('classes')
-        .doc(task.classId)
-        .collection('tasks')
-        .doc(task.id);
-    await ref.set(task.toJson());
-
-    // Send notifications to all members
-    final className = getClassById(task.classId)?.name ?? '';
-    await _sendNotificationToClassMembers(
-      classId: task.classId,
-      title: 'New Assignment: ${task.title}',
-      body: 'Due: ${task.dueDate} • $className',
-      type: 'task',
-      relatedId: task.classId,
-    );
-  }
-
-  // ─── Task Submissions ─────────────────────────────────────────────────────────
-
-  Stream<List<TaskSubmission>> getSubmissionsStream(String classId, String taskId) {
-    return _db
-        .collection('classes')
-        .doc(classId)
-        .collection('tasks')
-        .doc(taskId)
-        .collection('submissions')
-        .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => TaskSubmission.fromJson(d.data(), d.id))
-            .toList());
-  }
-
-  Future<TaskSubmission?> getMySubmission(String classId, String taskId) async {
-    if (currentUser == null) return null;
-    final doc = await _db
-        .collection('classes')
-        .doc(classId)
-        .collection('tasks')
-        .doc(taskId)
-        .collection('submissions')
-        .doc(currentUser!.id)
-        .get();
-    if (!doc.exists) return null;
-    return TaskSubmission.fromJson(doc.data()!, doc.id);
-  }
-
-  Stream<TaskSubmission?> getMySubmissionStream(String classId, String taskId) {
-    if (currentUser == null) return const Stream.empty();
-    return _db
-        .collection('classes')
-        .doc(classId)
-        .collection('tasks')
-        .doc(taskId)
-        .collection('submissions')
-        .doc(currentUser!.id)
-        .snapshots()
-        .map((doc) {
-      if (!doc.exists) return null;
-      return TaskSubmission.fromJson(doc.data()!, doc.id);
-    });
-  }
-
-  Future<String?> submitTask(String classId, String taskId) async {
-    if (currentUser == null) return 'Not logged in.';
-    try {
-      final sub = TaskSubmission(
-        id: currentUser!.id,
-        taskId: taskId,
-        classId: classId,
-        studentName: currentUser!.name,
-        status: 'submitted',
-        score: 0,
-        submittedAt: DateTime.now(),
-      );
-      await _db
-          .collection('classes')
-          .doc(classId)
-          .collection('tasks')
-          .doc(taskId)
-          .collection('submissions')
-          .doc(currentUser!.id)
-          .set(sub.toJson());
-      return null;
-    } catch (e) {
-      return 'Failed to submit. Please try again.';
-    }
-  }
-
-  Future<String?> gradeSubmission({
-    required String classId,
-    required String taskId,
-    required String studentId,
-    required int score,
-    String? feedback,
-  }) async {
-    try {
-      await _db
-          .collection('classes')
-          .doc(classId)
-          .collection('tasks')
-          .doc(taskId)
-          .collection('submissions')
-          .doc(studentId)
-          .update({
-        'score': score,
-        'status': 'graded',
-        'feedback': feedback ?? '',
-        'gradedAt': Timestamp.fromDate(DateTime.now()),
-      });
-      return null;
-    } catch (e) {
-      return 'Failed to grade submission.';
-    }
-  }
 
   // ─── Materials ────────────────────────────────────────────────────────────────
 
@@ -454,7 +326,11 @@ class AppState extends ChangeNotifier {
         .snapshots()
         .map((snap) => snap.docs
             .map((d) => CourseMaterial.fromJson(d.data(), d.id))
-            .toList());
+            .toList())
+        .handleError((e) {
+      debugPrint('getMaterialsStream error: $e');
+      return <CourseMaterial>[];
+    });
   }
 
   Future<void> addMaterial(String classId, CourseMaterial material) async {

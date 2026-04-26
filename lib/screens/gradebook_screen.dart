@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../models/models.dart';
 import '../providers/app_state.dart';
+import '../services/class_service.dart';
 import '../widgets/app_scaffold.dart';
 
 class GradebookScreen extends StatelessWidget {
@@ -18,6 +19,8 @@ class GradebookScreen extends StatelessWidget {
       return const Scaffold(body: Center(child: Text('Class not found')));
     }
 
+    final classService = ClassService();
+
     return Scaffold(
       body: AppGradientBackground(
         child: SafeArea(
@@ -30,15 +33,15 @@ class GradebookScreen extends StatelessWidget {
                 onBack: () => Navigator.pop(context),
               ),
               Expanded(
-                child: StreamBuilder<List<TaskItem>>(
-                  stream: app.getTasksStream(classId),
+                child: StreamBuilder<List<AssignmentModel>>(
+                  stream: classService.getAssignmentsStream(classId),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) {
                       return const Center(child: CircularProgressIndicator());
                     }
-                    final tasks = snapshot.data!;
+                    final assignments = snapshot.data!;
 
-                    if (tasks.isEmpty) {
+                    if (assignments.isEmpty) {
                       return Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -60,12 +63,13 @@ class GradebookScreen extends StatelessWidget {
 
                     return ListView.builder(
                       padding: const EdgeInsets.all(20),
-                      itemCount: tasks.length,
+                      itemCount: assignments.length,
                       itemBuilder: (context, i) {
-                        return _TaskGradebookCard(
-                          task: tasks[i],
+                        return _AssignmentGradebookCard(
+                          assignment: assignments[i],
                           classId: classId,
                           totalStudents: cls.studentCount,
+                          classService: classService,
                         ).animate()
                             .fadeIn(delay: Duration(milliseconds: 100 + i * 80))
                             .slideY(begin: 0.1);
@@ -82,50 +86,50 @@ class GradebookScreen extends StatelessWidget {
   }
 }
 
-// ─── Task Gradebook Card ──────────────────────────────────────────────────────
+// ─── Assignment Gradebook Card ────────────────────────────────────────────────
 
-class _TaskGradebookCard extends StatefulWidget {
-  final TaskItem task;
+class _AssignmentGradebookCard extends StatefulWidget {
+  final AssignmentModel assignment;
   final String classId;
   final int totalStudents;
+  final ClassService classService;
 
-  const _TaskGradebookCard({
-    required this.task,
+  const _AssignmentGradebookCard({
+    required this.assignment,
     required this.classId,
     required this.totalStudents,
+    required this.classService,
   });
 
   @override
-  State<_TaskGradebookCard> createState() => _TaskGradebookCardState();
+  State<_AssignmentGradebookCard> createState() => _AssignmentGradebookCardState();
 }
 
-class _TaskGradebookCardState extends State<_TaskGradebookCard> {
+class _AssignmentGradebookCardState extends State<_AssignmentGradebookCard> {
   bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
-    final app = context.read<AppState>();
-
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       elevation: 0,
       color: Theme.of(context).cardColor,
-      child: StreamBuilder<List<TaskSubmission>>(
-        stream: app.getSubmissionsStream(widget.classId, widget.task.id),
+      child: StreamBuilder<List<SubmissionModel>>(
+        stream: widget.classService.getSubmissionsStream(widget.classId, widget.assignment.id),
         builder: (context, snapshot) {
           final submissions = snapshot.data ?? [];
           final submitted = submissions.length;
-          final graded = submissions.where((s) => s.status == 'graded').length;
+          final graded = submissions.where((s) => s.score != null).length;
           final avgScore = graded > 0
               ? submissions
-                      .where((s) => s.status == 'graded')
-                      .map((s) => s.score)
+                      .where((s) => s.score != null)
+                      .map((s) => s.score!)
                       .reduce((a, b) => a + b) /
                   graded
               : 0.0;
-          final avgPercent = widget.task.points > 0
-              ? (avgScore / widget.task.points * 100).toStringAsFixed(0)
+          final avgPercent = widget.assignment.maxScore > 0
+              ? (avgScore / widget.assignment.maxScore * 100).toStringAsFixed(0)
               : '0';
 
           return Column(
@@ -143,7 +147,7 @@ class _TaskGradebookCardState extends State<_TaskGradebookCard> {
                       Row(
                         children: [
                           Expanded(
-                            child: Text(widget.task.title,
+                            child: Text(widget.assignment.title,
                                 style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 17)),
@@ -226,9 +230,30 @@ class _TaskGradebookCardState extends State<_TaskGradebookCard> {
                 else
                   ...submissions.map((sub) => _SubmissionRow(
                         submission: sub,
-                        task: widget.task,
+                        assignment: widget.assignment,
                         classId: widget.classId,
                       )),
+                
+                // Option to open full grading screen
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pushNamed(
+                          context, '/grade-assignment',
+                          arguments: {
+                            'classId': widget.classId,
+                            'assignment': widget.assignment,
+                          },
+                        );
+                      },
+                      icon: const Icon(Icons.fullscreen),
+                      label: const Text('Open Detailed Grading View'),
+                    ),
+                  ),
+                ),
               ],
             ],
           );
@@ -283,19 +308,19 @@ class _StatChip extends StatelessWidget {
 // ─── Submission Row ────────────────────────────────────────────────────────────
 
 class _SubmissionRow extends StatelessWidget {
-  final TaskSubmission submission;
-  final TaskItem task;
+  final SubmissionModel submission;
+  final AssignmentModel assignment;
   final String classId;
 
   const _SubmissionRow({
     required this.submission,
-    required this.task,
+    required this.assignment,
     required this.classId,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isGraded = submission.status == 'graded';
+    final isGraded = submission.score != null;
     return ListTile(
       contentPadding:
           const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
@@ -315,7 +340,7 @@ class _SubmissionRow extends StatelessWidget {
       title: Text(submission.studentName,
           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
       subtitle: isGraded
-          ? Text('Score: ${submission.score}/${task.points}',
+          ? Text('Score: ${submission.score}/${assignment.maxScore}',
               style: const TextStyle(color: Colors.green, fontSize: 12))
           : const Text('Awaiting grade',
               style: TextStyle(color: Colors.orange, fontSize: 12)),
@@ -326,107 +351,17 @@ class _SubmissionRow extends StatelessWidget {
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
-        onPressed: () => _showGradeDialog(context),
+        onPressed: () {
+          Navigator.pushNamed(
+            context, '/grade-assignment',
+            arguments: {
+              'classId': classId,
+              'assignment': assignment,
+            },
+          );
+        },
         child: Text(isGraded ? 'Edit' : 'Grade',
             style: const TextStyle(fontSize: 12)),
-      ),
-    );
-  }
-
-  void _showGradeDialog(BuildContext context) {
-    final app = context.read<AppState>();
-    final scoreCtrl = TextEditingController(
-        text: submission.status == 'graded' ? '${submission.score}' : '');
-    final feedbackCtrl =
-        TextEditingController(text: submission.feedback ?? '');
-    final formKey = GlobalKey<FormState>();
-    bool loading = false;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: Text('Grade: ${submission.studentName}'),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: scoreCtrl,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Score (max ${task.points})',
-                    prefixIcon: const Icon(Icons.star_outlined),
-                  ),
-                  validator: (v) {
-                    if (v == null || v.isEmpty) return 'Required';
-                    final n = int.tryParse(v);
-                    if (n == null) return 'Enter a number';
-                    if (n < 0 || n > task.points) {
-                      return 'Score must be 0–${task.points}';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: feedbackCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Feedback (optional)',
-                    prefixIcon: Icon(Icons.comment_outlined),
-                  ),
-                  minLines: 2,
-                  maxLines: 3,
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel')),
-            FilledButton(
-              onPressed: loading
-                  ? null
-                  : () async {
-                      if (!formKey.currentState!.validate()) return;
-                      setDialogState(() => loading = true);
-                      final error = await app.gradeSubmission(
-                        classId: classId,
-                        taskId: task.id,
-                        studentId: submission.id,
-                        score: int.parse(scoreCtrl.text),
-                        feedback: feedbackCtrl.text.trim().isEmpty
-                            ? null
-                            : feedbackCtrl.text.trim(),
-                      );
-                      if (!ctx.mounted) return;
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content:
-                              Text(error ?? 'Grade saved successfully!'),
-                          backgroundColor:
-                              error != null ? Colors.red : null,
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                      );
-                    },
-              child: loading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child:
-                          CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Save Grade'),
-            ),
-          ],
-        ),
       ),
     );
   }

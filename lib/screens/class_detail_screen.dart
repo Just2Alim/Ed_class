@@ -11,6 +11,121 @@ class ClassDetailScreen extends StatelessWidget {
   final String classId;
   const ClassDetailScreen({super.key, required this.classId});
 
+  // ── Inline Add Material sheet ───────────────────────────────────────────────
+  void _showAddMaterialSheet(BuildContext context) {
+    final nameCtrl = TextEditingController();
+    String selectedType = 'PDF';
+    final typeOptions = {
+      'PDF': Icons.picture_as_pdf,
+      'Slides': Icons.slideshow,
+      'Video': Icons.videocam_outlined,
+      'Link': Icons.link,
+      'Doc': Icons.article_outlined,
+    };
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 12,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('Add Material',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: nameCtrl,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Material Name',
+                  prefixIcon: Icon(Icons.insert_drive_file_outlined),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text('Type',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: typeOptions.entries.map((e) {
+                  final isSelected = selectedType == e.key;
+                  return ChoiceChip(
+                    avatar: Icon(e.value,
+                        size: 16,
+                        color: isSelected
+                            ? Colors.white
+                            : Theme.of(context).primaryColor),
+                    label: Text(e.key),
+                    selected: isSelected,
+                    onSelected: (v) {
+                      if (v) setModalState(() => selectedType = e.key);
+                    },
+                    selectedColor: Theme.of(context).primaryColor,
+                    labelStyle: TextStyle(
+                        color: isSelected ? Colors.white : null,
+                        fontWeight: isSelected ? FontWeight.bold : null),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                ),
+                onPressed: () async {
+                  final name = nameCtrl.text.trim();
+                  if (name.isEmpty) return;
+                  // Use the outer context (before pop) for AppState
+                  await context.read<AppState>().addMaterial(
+                        classId,
+                        CourseMaterial(
+                          id: DateTime.now().millisecondsSinceEpoch.toString(),
+                          name: name,
+                          type: selectedType,
+                          size: '—',
+                          iconCodePoint: typeOptions[selectedType]!.codePoint,
+                          uploadedBy:
+                              context.read<AppState>().currentUser?.name ?? '',
+                          uploadedAt: DateTime.now(),
+                        ),
+                      );
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Material "$name" added!'),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.add),
+                label: const Text('Add Material',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
@@ -28,7 +143,8 @@ class ClassDetailScreen extends StatelessWidget {
             children: [
               GradientHeader(
                 title: cls.name,
-                subtitle: '${cls.schedule.isNotEmpty ? cls.schedule : 'No schedule'} • ${cls.room.isNotEmpty ? cls.room : 'No room'}',
+                subtitle:
+                    '${cls.schedule.isNotEmpty ? cls.schedule : 'No schedule'} • ${cls.room.isNotEmpty ? cls.room : 'No room'}',
                 onBack: () => Navigator.pop(context),
                 actions: isTeacher
                     ? [
@@ -58,13 +174,12 @@ class ClassDetailScreen extends StatelessWidget {
                           icon: Icons.people_alt_outlined,
                           label: 'People',
                           color: const Color(0xFF4F46E5),
-                          onTap: () => Navigator.pushNamed(
-                              context, '/people',
+                          onTap: () => Navigator.pushNamed(context, '/people',
                               arguments: classId),
                         ).animate().fadeIn(delay: 100.ms).scale(begin: const Offset(0.8, 0.8)),
                         _ActionButton(
                           icon: Icons.forum_outlined,
-                          label: 'Chat (New)',
+                          label: 'Chat',
                           color: const Color(0xFF0D9488),
                           onTap: () {
                             Navigator.push(
@@ -109,9 +224,7 @@ class ClassDetailScreen extends StatelessWidget {
                                 fontSize: 20, fontWeight: FontWeight.bold)),
                         if (isTeacher)
                           TextButton.icon(
-                            onPressed: () => Navigator.pushNamed(
-                                context, '/manage-class',
-                                arguments: classId),
+                            onPressed: () => _showAddMaterialSheet(context),
                             icon: const Icon(Icons.add, size: 16),
                             label: const Text('Add'),
                           ),
@@ -121,9 +234,17 @@ class ClassDetailScreen extends StatelessWidget {
                     StreamBuilder<List<CourseMaterial>>(
                       stream: app.getMaterialsStream(classId),
                       builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return _EmptyState(
+                            icon: Icons.error_outline,
+                            message: 'Could not load materials',
+                          );
+                        }
                         if (!snapshot.hasData) {
-                          return const Center(
-                              child: CircularProgressIndicator());
+                          return const SizedBox(
+                            height: 60,
+                            child: Center(child: CircularProgressIndicator()),
+                          );
                         }
                         if (snapshot.data!.isEmpty) {
                           return _EmptyState(
@@ -135,8 +256,7 @@ class ClassDetailScreen extends StatelessWidget {
                         return Column(
                           children: snapshot.data!.map((m) {
                             return Card(
-                              margin:
-                                  const EdgeInsets.only(bottom: 10),
+                              margin: const EdgeInsets.only(bottom: 10),
                               elevation: 0,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
@@ -144,9 +264,8 @@ class ClassDetailScreen extends StatelessWidget {
                                     color: Colors.black.withAlpha(13)),
                               ),
                               child: ListTile(
-                                contentPadding:
-                                    const EdgeInsets.symmetric(
-                                        horizontal: 16, vertical: 8),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 8),
                                 leading: CircleAvatar(
                                   backgroundColor: Theme.of(context)
                                       .colorScheme
@@ -171,35 +290,53 @@ class ClassDetailScreen extends StatelessWidget {
 
                     const SizedBox(height: 28),
 
-                    // ── Advanced Assignments (With Files) ──
+                    // ── Assignments ──
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Assignments (Files)',
+                        const Text('Assignments',
                             style: TextStyle(
                                 fontSize: 20, fontWeight: FontWeight.bold)),
-                        if (isTeacher)
-                          TextButton.icon(
-                            onPressed: () => Navigator.pushNamed(
-                                context, '/create-assignment',
-                                arguments: classId),
-                            icon: const Icon(Icons.add, size: 16),
-                            label: const Text('New'),
-                          ),
+                        Row(
+                          children: [
+                            if (isTeacher)
+                              TextButton.icon(
+                                onPressed: () => Navigator.pushNamed(
+                                    context, '/create-assignment',
+                                    arguments: classId),
+                                icon: const Icon(Icons.add, size: 16),
+                                label: const Text('New'),
+                              ),
+                            TextButton(
+                              onPressed: () => Navigator.pushNamed(
+                                  context, '/class-tasks',
+                                  arguments: classId),
+                              child: const Text('See all'),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
                     StreamBuilder<List<AssignmentModel>>(
                       stream: ClassService().getAssignmentsStream(classId),
                       builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return _EmptyState(
+                            icon: Icons.error_outline,
+                            message: 'Could not load assignments',
+                          );
+                        }
                         if (!snapshot.hasData) {
-                          return const Center(
-                              child: CircularProgressIndicator());
+                          return const SizedBox(
+                            height: 60,
+                            child: Center(child: CircularProgressIndicator()),
+                          );
                         }
                         if (snapshot.data!.isEmpty) {
                           return _EmptyState(
                             icon: Icons.assignment_outlined,
-                            message: 'No advanced assignments posted yet',
+                            message: 'No assignments posted yet',
                           );
                         }
 
@@ -234,7 +371,8 @@ class ClassDetailScreen extends StatelessWidget {
                                 title: Text(t.title,
                                     style: const TextStyle(
                                         fontWeight: FontWeight.w600)),
-                                subtitle: Text('Max Score: ${t.maxScore} pts'),
+                                subtitle: Text(
+                                    'Max Score: ${t.maxScore} pts'),
                                 trailing: const Icon(Icons.chevron_right,
                                     color: Colors.grey),
                                 onTap: () {
@@ -243,97 +381,17 @@ class ClassDetailScreen extends StatelessWidget {
                                         context, '/grade-assignment',
                                         arguments: {
                                           'classId': classId,
-                                          'assignmentId': t.id
+                                          'assignment': t,
                                         });
                                   } else {
                                     Navigator.pushNamed(
                                         context, '/student-assignment',
                                         arguments: {
                                           'classId': classId,
-                                          'assignmentId': t.id
+                                          'assignment': t,
                                         });
                                   }
                                 },
-                              ),
-                            );
-                          }).toList(),
-                        );
-                      },
-                    ),
-
-                    const SizedBox(height: 28),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('Assignments',
-                            style: TextStyle(
-                                fontSize: 20, fontWeight: FontWeight.bold)),
-                        TextButton(
-                          onPressed: () => Navigator.pushNamed(
-                              context, '/class-tasks',
-                              arguments: classId),
-                          child: const Text('See all'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    StreamBuilder<List<TaskItem>>(
-                      stream: app.getTasksStream(classId),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData) {
-                          return const Center(
-                              child: CircularProgressIndicator());
-                        }
-                        if (snapshot.data!.isEmpty) {
-                          return _EmptyState(
-                            icon: Icons.assignment_outlined,
-                            message: 'No assignments posted yet',
-                          );
-                        }
-
-                        // Show latest 3
-                        final tasks = snapshot.data!.take(3).toList();
-                        return Column(
-                          children: tasks.map((t) {
-                            return Card(
-                              margin:
-                                  const EdgeInsets.only(bottom: 10),
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                side: BorderSide(
-                                    color: Colors.black.withAlpha(13)),
-                              ),
-                              child: ListTile(
-                                contentPadding:
-                                    const EdgeInsets.symmetric(
-                                        horizontal: 16, vertical: 8),
-                                leading: Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context)
-                                        .primaryColor
-                                        .withAlpha(25),
-                                    borderRadius:
-                                        BorderRadius.circular(12),
-                                  ),
-                                  child: Icon(
-                                    Icons.assignment_outlined,
-                                    color: Theme.of(context).primaryColor,
-                                    size: 20,
-                                  ),
-                                ),
-                                title: Text(t.title,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w600)),
-                                subtitle:
-                                    Text('Due: ${t.dueDate} • ${t.points} pts'),
-                                trailing: const Icon(
-                                    Icons.chevron_right,
-                                    color: Colors.grey),
-                                onTap: () => Navigator.pushNamed(
-                                    context, '/class-tasks',
-                                    arguments: classId),
                               ),
                             );
                           }).toList(),
@@ -351,7 +409,7 @@ class ClassDetailScreen extends StatelessWidget {
   }
 }
 
-// ─── Action Button ────────────────────────────────────────────────────────────
+// ─── Action Button ─────────────────────────────────────────────────────────────
 
 class _ActionButton extends StatelessWidget {
   final IconData icon;
@@ -405,7 +463,7 @@ class _ActionButton extends StatelessWidget {
   }
 }
 
-// ─── Empty State ──────────────────────────────────────────────────────────────
+// ─── Empty State ───────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
   final IconData icon;
@@ -425,12 +483,14 @@ class _EmptyState extends StatelessWidget {
         children: [
           Icon(icon, color: Colors.grey, size: 24),
           const SizedBox(width: 12),
-          Text(message,
-              style: TextStyle(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withAlpha(128))),
+          Expanded(
+            child: Text(message,
+                style: TextStyle(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withAlpha(128))),
+          ),
         ],
       ),
     );

@@ -5,6 +5,7 @@ import '../models/models.dart';
 import '../providers/app_state.dart';
 import '../widgets/app_scaffold.dart';
 import '../widgets/qr_display_dialog.dart';
+import '../services/class_service.dart';
 
 class ManageClassScreen extends StatelessWidget {
   final String classId;
@@ -91,8 +92,8 @@ class ManageClassScreen extends StatelessWidget {
                         final studentCount =
                             members.where((m) => m.role != 'Teacher').length;
 
-                        return StreamBuilder<List<TaskItem>>(
-                          stream: app.getTasksStream(classId),
+                        return StreamBuilder<List<AssignmentModel>>(
+                          stream: ClassService().getAssignmentsStream(classId),
                           builder: (context, taskSnap) {
                             final taskCount = taskSnap.data?.length ?? 0;
 
@@ -175,9 +176,29 @@ class ManageClassScreen extends StatelessWidget {
                     StreamBuilder<List<CourseMaterial>>(
                       stream: app.getMaterialsStream(classId),
                       builder: (context, snapshot) {
+                        if (snapshot.hasError) {
+                          return Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withAlpha(20),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.error_outline, color: Colors.red),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text('Error loading materials: ${snapshot.error}',
+                                      style: const TextStyle(color: Colors.red, fontSize: 12)),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
                         if (!snapshot.hasData) {
-                          return const Center(
-                              child: CircularProgressIndicator());
+                          return const SizedBox(
+                              height: 60,
+                              child: Center(child: CircularProgressIndicator()));
                         }
                         if (snapshot.data!.isEmpty) {
                           return Container(

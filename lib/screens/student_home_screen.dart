@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../models/models.dart';
 import '../providers/app_state.dart';
+import '../services/class_service.dart';
 import '../widgets/app_scaffold.dart';
 import 'profile_screen.dart';
 import 'scanner_screen.dart';
@@ -481,6 +482,7 @@ class _TaskList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.read<AppState>();
+    final classService = ClassService();
     // Build merged stream across all classes
     if (classes.isEmpty) {
       return const SizedBox.shrink();
@@ -506,8 +508,8 @@ class _TaskList extends StatelessWidget {
                           .onSurface
                           .withAlpha(128))),
             ),
-            StreamBuilder<List<TaskItem>>(
-              stream: app.getTasksStream(cls.id),
+            StreamBuilder<List<AssignmentModel>>(
+              stream: classService.getAssignmentsStream(cls.id),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) {
                   return const Padding(
@@ -519,13 +521,11 @@ class _TaskList extends StatelessWidget {
                 // Filter
                 if (filter == 'pending') {
                   tasks = tasks
-                      .where((t) => DateTime.parse(t.dueDate)
-                          .isAfter(DateTime.now()))
+                      .where((t) => t.deadline.isAfter(DateTime.now()))
                       .toList();
                 } else if (filter == 'done') {
                   tasks = tasks
-                      .where((t) => DateTime.parse(t.dueDate)
-                          .isBefore(DateTime.now()))
+                      .where((t) => t.deadline.isBefore(DateTime.now()))
                       .toList();
                 }
                 if (tasks.isEmpty) {
@@ -542,8 +542,7 @@ class _TaskList extends StatelessWidget {
                 }
                 return Column(
                   children: tasks.map((t) {
-                    final isOverdue = DateTime.parse(t.dueDate)
-                        .isBefore(DateTime.now());
+                    final isOverdue = t.deadline.isBefore(DateTime.now());
                     return Card(
                       margin: const EdgeInsets.only(bottom: 10),
                       elevation: 0,
@@ -576,15 +575,15 @@ class _TaskList extends StatelessWidget {
                                 fontWeight: FontWeight.w600,
                                 fontSize: 15)),
                         subtitle: Text(
-                          'Due: ${t.dueDate} · ${t.points} pts',
+                          'Due: ${DateFormat('MMM d, yyyy').format(t.deadline)} · ${t.maxScore} pts',
                           style: TextStyle(
                               fontSize: 12,
                               color: isOverdue ? Colors.red : null),
                         ),
                         trailing: FilledButton(
                           onPressed: () => Navigator.pushNamed(
-                              context, '/class-tasks',
-                              arguments: cls.id),
+                              context, '/student-assignment',
+                              arguments: {'classId': cls.id, 'assignment': t}),
                           style: FilledButton.styleFrom(
                             backgroundColor: const Color(0xFF10B981),
                             minimumSize: const Size(70, 32),

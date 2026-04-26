@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -21,7 +21,7 @@ class StudentAssignmentScreen extends StatefulWidget {
 class _StudentAssignmentScreenState extends State<StudentAssignmentScreen> {
   final _classService = ClassService();
   final _textAnswerCtrl = TextEditingController();
-  File? _selectedFile;
+  PlatformFile? _selectedFile;
   bool _isSubmitting = false;
 
   Future<void> _openFile(String url) async {
@@ -37,9 +37,9 @@ class _StudentAssignmentScreenState extends State<StudentAssignmentScreen> {
 
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles();
-    if (result != null && result.files.single.path != null) {
+    if (result != null && result.files.isNotEmpty) {
       setState(() {
-        _selectedFile = File(result.files.single.path!);
+        _selectedFile = result.files.first;
       });
     }
   }
@@ -210,7 +210,7 @@ class _StudentAssignmentScreenState extends State<StudentAssignmentScreen> {
                     OutlinedButton.icon(
                       onPressed: _pickFile,
                       icon: const Icon(Icons.attach_file),
-                      label: Text(_selectedFile == null ? 'Attach File (Optional)' : _selectedFile!.path.split('/').last),
+                      label: Text(_selectedFile == null ? 'Attach File (Optional)' : _selectedFile!.name),
                     ),
                     const SizedBox(height: 24),
                     FilledButton.icon(

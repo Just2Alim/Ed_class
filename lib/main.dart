@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
 import 'providers/app_state.dart';
+import 'models/models.dart';
 import 'core/theme.dart';
 import 'screens/auth_screen.dart';
 import 'screens/calendar_screen.dart';
@@ -181,14 +182,14 @@ class EduClassApp extends StatelessWidget {
                 return MaterialPageRoute(
                   builder: (_) => StudentAssignmentScreen(
                       classId: args['classId'] as String,
-                      assignmentId: args['assignmentId'] as String),
+                      assignment: args['assignment'] as AssignmentModel),
                 );
               case '/grade-assignment':
                 final args = settings.arguments as Map<String, dynamic>;
                 return MaterialPageRoute(
                   builder: (_) => GradeAssignmentScreen(
                       classId: args['classId'] as String,
-                      assignmentId: args['assignmentId'] as String),
+                      assignment: args['assignment'] as AssignmentModel),
                 );
 
               // ── 404 ─────────────────────────────────────────────

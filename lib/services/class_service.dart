@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../models/models.dart';
@@ -36,15 +36,14 @@ class ClassService {
   // ─── ASSIGNMENTS ───────────────────────────────────────────────────────────
 
   Future<void> createAssignment(
-      String classId, AssignmentModel assignment, File? file) async {
+      String classId, AssignmentModel assignment, PlatformFile? file) async {
     try {
       String? fileUrl;
 
-      // Обходная версия (БЕЗ Firebase Storage)
-      // Для локального тестирования просто сохраняем абсолютный путь к файлу
+      // Bypass (no Firebase Storage): store just the filename as a reference
       if (file != null) {
-        // Чтобы url_launcher смог его открыть, добавляем префикс file://
-        fileUrl = 'file://${file.path}';
+        // On Web, file.path is unavailable — use file.name only
+        fileUrl = 'local://${file.name}';
       }
 
       final data = assignment.toMap();
@@ -80,14 +79,15 @@ class ClassService {
     required String classId,
     required String assignmentId,
     required SubmissionModel submission,
-    File? file,
+    PlatformFile? file,
   }) async {
     try {
       String? fileUrl;
 
-      // Обходная версия (БЕЗ Firebase Storage)
+      // Bypass (no Firebase Storage): store just the filename as a reference
       if (file != null) {
-        fileUrl = 'file://${file.path}';
+        // On Web, file.path is unavailable — use file.name only
+        fileUrl = 'local://${file.name}';
       }
 
       final data = submission.toMap();

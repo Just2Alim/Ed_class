@@ -579,7 +579,7 @@ class _TeacherGradeCenterTab extends StatelessWidget {
                       style: TextStyle(
                           color: Theme.of(context)
                               .colorScheme
-                              .onSurface
+                          .onSurface
                               .withAlpha(128),
                           fontSize: 13)),
                 ],
@@ -601,81 +601,64 @@ class _TeacherGradeCenterTab extends StatelessWidget {
                           const SizedBox(height: 12),
                       itemBuilder: (ctx, i) {
                         final cls = classes[i];
-                        return StreamBuilder<QuerySnapshot>(
-                          stream: FirebaseFirestore.instance
-                              .collectionGroup('submissions')
-                              .where('classId', isEqualTo: cls.id)
-                              .where('grade', isNull: true)
-                              .snapshots(),
-                          builder: (context, snap) {
-                            final pending =
-                                snap.data?.docs.length ?? 0;
-                            return Card(
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                                side: BorderSide(
-                                    color: Colors.black.withAlpha(13)),
+                        return Card(
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            side: BorderSide(
+                                color: Colors.black.withAlpha(13)),
+                          ),
+                          child: ListTile(
+                            contentPadding:
+                                const EdgeInsets.all(16),
+                            leading: Container(
+                              width: 52,
+                              height: 52,
+                              decoration: BoxDecoration(
+                                borderRadius:
+                                    BorderRadius.circular(14),
+                                gradient: LinearGradient(
+                                    colors: cls.gradient),
                               ),
-                              child: ListTile(
-                                contentPadding:
-                                    const EdgeInsets.all(16),
-                                leading: Container(
-                                  width: 52,
-                                  height: 52,
-                                  decoration: BoxDecoration(
+                              child: const Icon(
+                                  Icons.menu_book_rounded,
+                                  color: Colors.white,
+                                  size: 24),
+                            ),
+                            title: Text(cls.name,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 16)),
+                            subtitle: const Text(
+                              'Tap to review assignments',
+                              style: TextStyle(
+                                fontSize: 13,
+                              ),
+                            ),
+                            trailing: FilledButton(
+                              onPressed: () =>
+                                  Navigator.pushNamed(
+                                      context, '/gradebook',
+                                      arguments: cls.id),
+                              style: FilledButton.styleFrom(
+                                minimumSize:
+                                    const Size(80, 36),
+                                padding:
+                                    const EdgeInsets.symmetric(
+                                        horizontal: 12),
+                                shape: RoundedRectangleBorder(
                                     borderRadius:
-                                        BorderRadius.circular(14),
-                                    gradient: LinearGradient(
-                                        colors: cls.gradient),
-                                  ),
-                                  child: const Icon(
-                                      Icons.menu_book_rounded,
-                                      color: Colors.white,
-                                      size: 24),
-                                ),
-                                title: Text(cls.name,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 16)),
-                                subtitle: Text(
-                                  pending > 0
-                                      ? '$pending submission${pending == 1 ? '' : 's'} waiting for review'
-                                      : 'All submissions graded ✓',
-                                  style: TextStyle(
-                                    color: pending > 0
-                                        ? Colors.orange
-                                        : const Color(0xFF10B981),
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                trailing: FilledButton(
-                                  onPressed: () =>
-                                      Navigator.pushNamed(
-                                          context, '/gradebook',
-                                          arguments: cls.id),
-                                  style: FilledButton.styleFrom(
-                                    minimumSize:
-                                        const Size(80, 36),
-                                    padding:
-                                        const EdgeInsets.symmetric(
-                                            horizontal: 12),
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(
-                                                10)),
-                                  ),
-                                  child: const Text('Open',
-                                      style: TextStyle(
-                                          fontSize: 12)),
-                                ),
+                                        BorderRadius.circular(
+                                            10)),
                               ),
-                            ).animate().fadeIn(
-                                delay:
-                                    Duration(milliseconds: 80 * i));
-                          },
-                        );
+                              child: const Text('Open',
+                                  style: TextStyle(
+                                      fontSize: 12)),
+                            ),
+                          ),
+                        ).animate().fadeIn(
+                            delay:
+                                Duration(milliseconds: 80 * i));
                       },
                     ),
             ),
