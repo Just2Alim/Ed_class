@@ -19,7 +19,10 @@ import 'screens/student_home_screen.dart';
 import 'screens/tasks_screen.dart';
 import 'screens/teacher_home_screen.dart';
 import 'screens/welcome_screen.dart';
-
+import 'screens/class_chat_screen.dart';
+import 'screens/create_assignment_screen.dart';
+import 'screens/student_assignment_screen.dart';
+import 'screens/grade_assignment_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
@@ -165,6 +168,27 @@ class EduClassApp extends StatelessWidget {
                 return MaterialPageRoute(
                   builder: (_) =>
                       GradebookScreen(classId: settings.arguments as String),
+                );
+
+              // ── Advanced Tasks Flow ─────────────────────────────────────
+              case '/create-assignment':
+                return MaterialPageRoute(
+                  builder: (_) => CreateAssignmentScreen(
+                      classId: settings.arguments as String),
+                );
+              case '/student-assignment':
+                final args = settings.arguments as Map<String, dynamic>;
+                return MaterialPageRoute(
+                  builder: (_) => StudentAssignmentScreen(
+                      classId: args['classId'] as String,
+                      assignmentId: args['assignmentId'] as String),
+                );
+              case '/grade-assignment':
+                final args = settings.arguments as Map<String, dynamic>;
+                return MaterialPageRoute(
+                  builder: (_) => GradeAssignmentScreen(
+                      classId: args['classId'] as String,
+                      assignmentId: args['assignmentId'] as String),
                 );
 
               // ── 404 ─────────────────────────────────────────────

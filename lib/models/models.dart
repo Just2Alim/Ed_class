@@ -1,6 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
+export 'user_model.dart';
+export 'class_model.dart';
+export 'message_model.dart';
+export 'assignment_model.dart';
+export 'submission_model.dart';
+
 // ─── AppUser ────────────────────────────────────────────────────────────────
 
 class AppUser {

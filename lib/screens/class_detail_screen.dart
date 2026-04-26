@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../models/models.dart';
 import '../providers/app_state.dart';
+import '../services/class_service.dart';
 import '../widgets/app_scaffold.dart';
+import 'class_chat_screen.dart';
 
 class ClassDetailScreen extends StatelessWidget {
   final String classId;
@@ -62,11 +64,19 @@ class ClassDetailScreen extends StatelessWidget {
                         ).animate().fadeIn(delay: 100.ms).scale(begin: const Offset(0.8, 0.8)),
                         _ActionButton(
                           icon: Icons.forum_outlined,
-                          label: 'Chat',
+                          label: 'Chat (New)',
                           color: const Color(0xFF0D9488),
-                          onTap: () => Navigator.pushNamed(
-                              context, '/chat',
-                              arguments: classId),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ClassChatScreen(
+                                  classId: classId,
+                                  className: cls.name,
+                                ),
+                              ),
+                            );
+                          },
                         ).animate().fadeIn(delay: 150.ms).scale(begin: const Offset(0.8, 0.8)),
                         _ActionButton(
                           icon: Icons.assignment_outlined,
@@ -161,7 +171,97 @@ class ClassDetailScreen extends StatelessWidget {
 
                     const SizedBox(height: 28),
 
-                    // ── Assignments ──
+                    // ── Advanced Assignments (With Files) ──
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Assignments (Files)',
+                            style: TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.bold)),
+                        if (isTeacher)
+                          TextButton.icon(
+                            onPressed: () => Navigator.pushNamed(
+                                context, '/create-assignment',
+                                arguments: classId),
+                            icon: const Icon(Icons.add, size: 16),
+                            label: const Text('New'),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    StreamBuilder<List<AssignmentModel>>(
+                      stream: ClassService().getAssignmentsStream(classId),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        }
+                        if (snapshot.data!.isEmpty) {
+                          return _EmptyState(
+                            icon: Icons.assignment_outlined,
+                            message: 'No advanced assignments posted yet',
+                          );
+                        }
+
+                        final tasks = snapshot.data!.take(3).toList();
+                        return Column(
+                          children: tasks.map((t) {
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                                side: BorderSide(
+                                    color: Colors.black.withAlpha(13)),
+                              ),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 8),
+                                leading: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context)
+                                        .primaryColor
+                                        .withAlpha(25),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(
+                                    Icons.file_present_rounded,
+                                    color: Theme.of(context).primaryColor,
+                                    size: 20,
+                                  ),
+                                ),
+                                title: Text(t.title,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600)),
+                                subtitle: Text('Max Score: ${t.maxScore} pts'),
+                                trailing: const Icon(Icons.chevron_right,
+                                    color: Colors.grey),
+                                onTap: () {
+                                  if (isTeacher) {
+                                    Navigator.pushNamed(
+                                        context, '/grade-assignment',
+                                        arguments: {
+                                          'classId': classId,
+                                          'assignmentId': t.id
+                                        });
+                                  } else {
+                                    Navigator.pushNamed(
+                                        context, '/student-assignment',
+                                        arguments: {
+                                          'classId': classId,
+                                          'assignmentId': t.id
+                                        });
+                                  }
+                                },
+                              ),
+                            );
+                          }).toList(),
+                        );
+                      },
+                    ),
+
+                    const SizedBox(height: 28),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
