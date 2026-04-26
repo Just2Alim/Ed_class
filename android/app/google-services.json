@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "95397688650",
+    "project_id": "edclass-a9119",
+    "storage_bucket": "edclass-a9119.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:95397688650:android:818347834678d473eb3db3",
+        "android_client_info": {
+          "package_name": "com.example.educlass_flutter"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAGbJA8Vsfsy6t9HaEyB2uuI5dWdaL7rAU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
