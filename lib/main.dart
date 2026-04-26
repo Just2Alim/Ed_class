@@ -181,7 +181,7 @@ class EduClassApp extends StatelessWidget {
                 final args = settings.arguments as Map<String, dynamic>;
                 return MaterialPageRoute(
                   builder: (_) => StudentAssignmentScreen(
-                      classId: args['classId'] as String,
+                      classId: args['classId'] as String, 
                       assignment: args['assignment'] as AssignmentModel),
                 );
               case '/grade-assignment':
