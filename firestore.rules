@@ -6,61 +6,50 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Users collection
     match /users/{userId} {
       allow read, write: if isAuthenticated() && request.auth.uid == userId;
-
       match /notifications/{notifId} {
         allow read, write: if isAuthenticated() && request.auth.uid == userId;
       }
-
       match /events/{eventId} {
         allow read, write: if isAuthenticated() && request.auth.uid == userId;
       }
     }
 
-    // Classes collection
     match /classes/{classId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
       allow update: if isAuthenticated();
       allow delete: if isAuthenticated() && resource.data.instructorId == request.auth.uid;
 
-      // Members subcollection
       match /members/{memberId} {
         allow read: if isAuthenticated();
         allow write: if isAuthenticated();
       }
 
-      // Chat messages subcollection
       match /messages/{messageId} {
         allow read: if isAuthenticated();
         allow create: if isAuthenticated() && request.resource.data.senderId == request.auth.uid;
         allow update, delete: if false;
       }
 
-      // Course materials subcollection
       match /materials/{materialId} {
         allow read: if isAuthenticated();
         allow write: if isAuthenticated();
       }
 
-      // Legacy tasks subcollection
       match /tasks/{taskId} {
         allow read: if isAuthenticated();
         allow write: if isAuthenticated();
-
         match /submissions/{studentId} {
           allow read: if isAuthenticated();
           allow write: if isAuthenticated();
         }
       }
 
-      // Assignments subcollection (new system)
       match /assignments/{assignmentId} {
         allow read: if isAuthenticated();
         allow write: if isAuthenticated();
-
         match /submissions/{studentId} {
           allow read: if isAuthenticated();
           allow write: if isAuthenticated();
