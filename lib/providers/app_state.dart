@@ -1,14 +1,16 @@
 import 'dart:async';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/models.dart';
+import '../services/auth_service.dart';
+import '../services/database_service.dart';
 
 class AppState extends ChangeNotifier {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final AuthService _authService = AuthService();
+  final DatabaseService _dbService = DatabaseService();
+  final FirebaseFirestore _db = FirebaseFirestore.instance; // For extra methods left in AppState
 
   AppUser? currentUser;
   ThemeMode themeMode = ThemeMode.system;
@@ -65,7 +67,7 @@ class AppState extends ChangeNotifier {
   /// Returns a map: {isLoggedIn: bool, role: String}
   Future<Map<String, dynamic>> checkAuthState() async {
     await loadThemePreference();
-    final user = _auth.currentUser;
+    final user = _authService.currentUser;
     if (user != null) {
       await _loadUserAndData(user.uid);
       final role = currentUser?.role ?? 'student';
@@ -86,11 +88,11 @@ class AppState extends ChangeNotifier {
     String? studentId,
   }) async {
     try {
-      final credential = await _auth.createUserWithEmailAndPassword(
-        email: email.trim(),
-        password: password.trim(),
+      final credential = await _authService.registerWithEmailAndPassword(
+        email,
+        password,
+        name,
       );
-      await credential.user?.updateDisplayName(name.trim());
 
       final userModel = AppUser(
         id: credential.user!.uid,
@@ -102,51 +104,25 @@ class AppState extends ChangeNotifier {
         joinedClasses: [],
       );
 
-      await _db.collection('users').doc(userModel.id).set(userModel.toJson());
+      await _dbService.createUser(userModel);
       await _loadUserAndData(userModel.id);
       return null;
-    } on FirebaseAuthException catch (e) {
-      return _authErrorMessage(e.code);
     } catch (e) {
-      return 'An unexpected error occurred. Please try again.';
+      return _authService.handleAuthError(e.toString());
     }
   }
 
   /// Returns null on success, or a human-readable error message on failure.
   Future<String?> login(String email, String password) async {
     try {
-      final credential = await _auth.signInWithEmailAndPassword(
-        email: email.trim(),
-        password: password.trim(),
+      final credential = await _authService.signInWithEmailAndPassword(
+        email,
+        password,
       );
       await _loadUserAndData(credential.user!.uid);
       return null;
-    } on FirebaseAuthException catch (e) {
-      return _authErrorMessage(e.code);
     } catch (e) {
-      return 'An unexpected error occurred. Please try again.';
-    }
-  }
-
-  String _authErrorMessage(String code) {
-    switch (code) {
-      case 'email-already-in-use':
-        return 'This email is already registered. Please sign in instead.';
-      case 'invalid-email':
-        return 'Invalid email address format.';
-      case 'weak-password':
-        return 'Password is too weak. Use at least 6 characters.';
-      case 'user-not-found':
-        return 'No account found with this email. Please register first.';
-      case 'wrong-password':
-      case 'invalid-credential':
-        return 'Incorrect email or password. Please try again.';
-      case 'user-disabled':
-        return 'This account has been disabled. Contact support.';
-      case 'too-many-requests':
-        return 'Too many failed attempts. Please try again later.';
-      default:
-        return 'Authentication failed ($code). Please try again.';
+      return _authService.handleAuthError(e.toString());
     }
   }
 
@@ -154,42 +130,36 @@ class AppState extends ChangeNotifier {
     _userSub?.cancel();
     _classesSub?.cancel();
 
-    // Await initial fetch so currentUser is not null immediately after login/register
-    // Await initial fetch so currentUser is not null immediately after login/register
     try {
-      final docSnap = await _db.collection('users').doc(uid).get(const GetOptions(source: Source.serverAndCache)).timeout(const Duration(seconds: 3));
-      if (docSnap.exists) {
-        currentUser = AppUser.fromJson(docSnap.data()!, docSnap.id);
+      final user = await _dbService.getUser(uid);
+      if (user != null) {
+        currentUser = user;
       } else {
-        // Recovery: if user exists in Auth but not Firestore
+        // Recovery
         currentUser = AppUser(
           id: uid,
-          name: _auth.currentUser?.displayName ?? 'User',
-          email: _auth.currentUser?.email ?? '',
+          name: _authService.currentUser?.displayName ?? 'User',
+          email: _authService.currentUser?.email ?? '',
           role: 'student', // Default fallback role
           department: 'General',
         );
-        // Fire and forget the fix to firestore
-        _db.collection('users').doc(uid).set(currentUser!.toJson()).catchError((_) {});
+        _dbService.createUser(currentUser!).catchError((_) {});
       }
       _subscribeClasses();
     } catch (e) {
       debugPrint('Error fetching initial user data: $e');
-      // Extreme fallback so app doesn't crash completely
       currentUser = AppUser(
         id: uid,
-        name: _auth.currentUser?.displayName ?? 'Offline User',
-        email: _auth.currentUser?.email ?? '',
+        name: _authService.currentUser?.displayName ?? 'Offline User',
+        email: _authService.currentUser?.email ?? '',
         role: 'student',
         department: 'General',
       );
     }
 
-    // Listen to user doc for future updates
-    _userSub = _db.collection('users').doc(uid).snapshots().listen((doc) {
-      if (doc.exists) {
-        currentUser = AppUser.fromJson(doc.data()!, doc.id);
-        // Re-subscribe classes when joinedClasses changes
+    _userSub = _dbService.getUserStream(uid).listen((user) {
+      if (user != null) {
+        currentUser = user;
         _subscribeClasses();
         notifyListeners();
       }
@@ -201,39 +171,13 @@ class AppState extends ChangeNotifier {
     if (currentUser == null) return;
 
     if (currentUser!.role == 'teacher') {
-      // Teachers: get classes where they are instructor
-      _classesSub = _db
-          .collection('classes')
-          .where('instructorId', isEqualTo: currentUser!.id)
-          .snapshots()
-          .listen((snap) {
-        _classes = snap.docs
-            .map((doc) => ClassItem.fromJson(doc.data(), doc.id))
-            .toList();
+      _classesSub = _dbService.getTeacherClassesStream(currentUser!.id).listen((cls) {
+        _classes = cls;
         notifyListeners();
       });
     } else {
-      // Students: get only joined classes
-      final joined = currentUser!.joinedClasses;
-      if (joined.isEmpty) {
-        _classes = [];
-        notifyListeners();
-        return;
-      }
-      // Firestore 'whereIn' supports up to 30 items
-      final chunks = <List<String>>[];
-      for (int i = 0; i < joined.length; i += 30) {
-        chunks.add(joined.sublist(i, i + 30 > joined.length ? joined.length : i + 30));
-      }
-      // For simplicity, listen to first chunk (most users have < 30 classes)
-      _classesSub = _db
-          .collection('classes')
-          .where(FieldPath.documentId, whereIn: chunks.first)
-          .snapshots()
-          .listen((snap) {
-        _classes = snap.docs
-            .map((doc) => ClassItem.fromJson(doc.data(), doc.id))
-            .toList();
+      _classesSub = _dbService.getStudentClassesStream(currentUser!.joinedClasses).listen((cls) {
+        _classes = cls;
         notifyListeners();
       });
     }
@@ -242,7 +186,7 @@ class AppState extends ChangeNotifier {
   Future<void> logout() async {
     _userSub?.cancel();
     _classesSub?.cancel();
-    await _auth.signOut();
+    await _authService.signOut();
     currentUser = null;
     _classes = [];
     notifyListeners();
@@ -265,8 +209,8 @@ class AppState extends ChangeNotifier {
         if (studentId != null && studentId.trim().isNotEmpty)
           'studentId': studentId.trim(),
       };
-      await _db.collection('users').doc(currentUser!.id).update(updates);
-      await _auth.currentUser?.updateDisplayName(name.trim());
+      await _dbService.updateUser(currentUser!.id, updates);
+      await _authService.updateDisplayName(name.trim());
       return null;
     } catch (e) {
       return 'Failed to update profile. Please try again.';
@@ -275,12 +219,10 @@ class AppState extends ChangeNotifier {
 
   Future<String?> updatePassword(String newPassword) async {
     try {
-      await _auth.currentUser?.updatePassword(newPassword);
+      await _authService.updatePassword(newPassword);
       return null;
-    } on FirebaseAuthException catch (e) {
-      return _authErrorMessage(e.code);
     } catch (e) {
-      return 'Failed to update password.';
+      return _authService.handleAuthError(e.toString());
     }
   }
 
@@ -308,28 +250,13 @@ class AppState extends ChangeNotifier {
 
 
   Future<void> addClass(ClassItem item) async {
-    await _db.collection('classes').doc(item.id).set(item.toJson());
-    // Add teacher as a member
     if (currentUser != null) {
-      await _db
-          .collection('classes')
-          .doc(item.id)
-          .collection('members')
-          .doc(currentUser!.id)
-          .set(MemberItem(
-            id: currentUser!.id,
-            name: currentUser!.name,
-            role: 'Teacher',
-            email: currentUser!.email,
-          ).toJson());
+      await _dbService.createClass(item, currentUser!);
     }
   }
 
   Future<void> updateClass(ClassItem updated) async {
-    await _db
-        .collection('classes')
-        .doc(updated.id)
-        .set(updated.toJson(), SetOptions(merge: true));
+    await _dbService.updateClass(updated);
   }
 
   Future<String?> joinClass(String classId) async {
@@ -338,38 +265,11 @@ class AppState extends ChangeNotifier {
       return 'You are already in this class.';
     }
 
-    // Check class exists
-    final classDoc = await _db.collection('classes').doc(classId).get();
-    if (!classDoc.exists) return 'Class not found. Check the Class ID.';
-
     try {
-      // Add to user's joinedClasses
-      await _db.collection('users').doc(currentUser!.id).update({
-        'joinedClasses': FieldValue.arrayUnion([classId]),
-      });
-
-      // Add to class members subcollection
-      await _db
-          .collection('classes')
-          .doc(classId)
-          .collection('members')
-          .doc(currentUser!.id)
-          .set(MemberItem(
-            id: currentUser!.id,
-            name: currentUser!.name,
-            role: 'Student',
-            email: currentUser!.email,
-            studentId: currentUser!.studentId,
-          ).toJson());
-
-      // Increment studentCount
-      await _db.collection('classes').doc(classId).update({
-        'studentCount': FieldValue.increment(1),
-      });
-
+      await _dbService.joinClass(classId, currentUser!);
       return null;
     } catch (e) {
-      return 'Failed to join class. Please try again.';
+      return e.toString().replaceAll('Exception: ', '');
     }
   }
 

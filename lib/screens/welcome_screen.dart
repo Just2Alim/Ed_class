@@ -16,11 +16,12 @@ class WelcomeScreen extends StatelessWidget {
           ),
         ),
         child: SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Spacer(flex: 2),
+                const SizedBox(height: 40),
 
                 // ── Logo ──
                 Container(
@@ -68,7 +69,7 @@ class WelcomeScreen extends StatelessWidget {
                   ),
                 ).animate().fadeIn(delay: 350.ms),
 
-                const Spacer(flex: 2),
+                const SizedBox(height: 40),
 
                 // ── Feature chips ──
                 Row(
@@ -96,7 +97,7 @@ class WelcomeScreen extends StatelessWidget {
                   ],
                 ),
 
-                const Spacer(flex: 3),
+                const SizedBox(height: 50),
 
                 // ── Role Selection Header ──
                 const Text(

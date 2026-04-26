@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
+import '../services/database_service.dart';
 
 class ScannerScreen extends StatefulWidget {
   const ScannerScreen({super.key});
@@ -12,6 +13,7 @@ class ScannerScreen extends StatefulWidget {
 
 class _ScannerScreenState extends State<ScannerScreen> {
   final MobileScannerController _controller = MobileScannerController();
+  final DatabaseService _dbService = DatabaseService();
   bool _isScanned = false;
 
   @override
@@ -81,27 +83,33 @@ class _ScannerScreenState extends State<ScannerScreen> {
   Future<void> _handleCode(String code) async {
     setState(() => _isScanned = true);
 
-    final error = await context.read<AppState>().joinClass(code);
-    if (!mounted) return;
-
-    if (error != null) {
-      setState(() => _isScanned = false); // allow retry
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Successfully joined class! 🎉'),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      Navigator.pop(context);
+    final appState = context.read<AppState>();
+    
+    if (appState.currentUser == null) {
+      _showSnackBar('Ошибка: Вы не авторизованы', Colors.red);
+      setState(() => _isScanned = false);
+      return;
     }
+
+    final error = await appState.joinClass(code);
+
+    if (error == null) {
+      _showSnackBar('Успешно присоединились к классу! 🎉', Colors.green);
+      if (mounted) Navigator.pop(context);
+    } else {
+      setState(() => _isScanned = false);
+      _showSnackBar(error, Colors.red);
+    }
+  }
+
+  void _showSnackBar(String message, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 }

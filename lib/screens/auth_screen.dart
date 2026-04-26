@@ -361,8 +361,9 @@ class _AuthScreenState extends State<AuthScreen> {
       return;
     }
 
-    // ✅ Route to the correct home screen based on the requested role
-    final homeRoute = widget.role == 'teacher' ? '/teacher-home' : '/student-home';
+    // ✅ Route to the correct home screen based on the ACTUAL role in DB
+    final actualRole = app.currentUser?.role ?? widget.role;
+    final homeRoute = actualRole == 'teacher' ? '/teacher-home' : '/student-home';
     Navigator.pushNamedAndRemoveUntil(context, homeRoute, (_) => false);
   }
 }
